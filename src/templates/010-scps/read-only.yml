@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  targetIds:
+    Type: CommaDelimitedList
+
+Resources:
+  Scp:
+    Type: Community::Organizations::Policy
+    Properties:
+      Description: Deny all actions
+      Name: ReadOnly
+      PolicyType: SERVICE_CONTROL_POLICY
+      TargetIds: !Ref targetIds
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyWriters
+            Effect: Deny
+            Action:
+              - '*'
+            Resource: '*'
+            Condition:
+              StringNotLike:
+                aws:PrincipalArn: arn:aws:iam::*:role/readonly

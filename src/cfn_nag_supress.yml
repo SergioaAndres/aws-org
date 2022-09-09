@@ -1,0 +1,3 @@
+RulesToSuppress:
+- id: W28
+  reason: Avoid warning for resource found with an explicit name, this disallows updates that require replacement of this resource

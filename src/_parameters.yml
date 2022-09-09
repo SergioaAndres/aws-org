@@ -1,0 +1,15 @@
+# if you use this resource prefix in all stacks deployed by this project they are easily identifiable
+resourcePrefix:
+  Type: String
+  Default: poc
+
+primaryRegion:
+  Type: String
+  Default: us-east-2
+
+# sometimes you will need to deploy a task to all regions you allow. you can use this parameter to keep that list in 1 place
+allRegions:
+  Type: List<String>
+  Default:
+    - us-east-2
+    - us-west-2

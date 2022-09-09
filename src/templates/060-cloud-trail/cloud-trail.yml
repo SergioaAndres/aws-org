@@ -1,0 +1,166 @@
+AWSTemplateFormatVersion: '2010-09-09-OC'
+
+Parameters:
+  resourcePrefix:
+    Type: String
+
+  logDeletionDays:
+    Type: Number
+    Default: 365
+
+Resources:
+  CloudTrailBucket:
+    OrganizationBinding: !Ref LogArchiveBinding
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${resourcePrefix}-cloudtrail-${LogArchiveAccount}'
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: !Ref logDeletionDays
+            Id: !Sub '${resourcePrefix}-cloudtrail-bucket-lifecycle-configuration'
+            Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref CloudTrailBucketLoggingBucket
+        LogFilePrefix: access-logs
+
+  CloudTrailBucketPolicy:
+    OrganizationBinding: !Ref LogArchiveBinding
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: 'AWSCloudTrailForceHttps'
+            Effect: Deny
+            Principal: "*"
+            Action: "*"
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: False
+  CloudTrailBucketLoggingBucket:
+    OrganizationBinding: !Ref LogArchiveBinding
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: LogDeliveryWrite
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W35
+            reason: This is a logging bucket which should not have server access logging enabled.
+  CloudTrailBucketLoggingBucketPolicy:
+    OrganizationBinding: !Ref LogArchiveBinding
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucketLoggingBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AWSLoginServiceWrite
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucketLoggingBucket.Arn}/access-logs*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Sub ${AWS::AccountId}
+              ArnLike: 
+                aws:SourceArn: !Sub ${CloudTrailBucket.Arn}
+          - Sid: 'AWSLoginServiceForceHttps'
+            Effect: Deny
+            Principal: "*"
+            Action: "*"
+            Resource: !Sub '${CloudTrailBucketLoggingBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: False
+  
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+      LogGroupName: CloudTrail/audit-log
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: Using default encryption. AWS KMS is not necessary.
+  CloudTrailLogGroupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${resourcePrefix}-AWSCloudTrailLogGroupRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: AssumeRole
+          Effect: Allow
+          Principal:
+            Service: cloudtrail.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: cloudtrail-policy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Sid: AWSCloudTrailCreateLogStream
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !GetAtt CloudTrailLogGroup.Arn
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: 
+     - CloudTrailBucketPolicy
+    Properties:
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailLogGroupRole.Arn
+      TrailName: !Sub '${resourcePrefix}-trail'

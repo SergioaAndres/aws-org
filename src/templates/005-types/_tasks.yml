@@ -1,0 +1,17 @@
+Parameters:
+  <<: !Include "../../_parameters.yml"
+
+  catalogBucket:
+    Type: String
+    Default: community-resource-provider-catalog
+
+# Source code repository for the CloudFormation types: https://github.com/org-formation/aws-resource-providers
+
+OrganizationsPolicyRp:
+  Type: register-type
+  ResourceType: "Community::Organizations::Policy"
+  SchemaHandlerPackage: !Sub "s3://${catalogBucket}/community-organizations-policy-0.2.2.zip"
+  MaxConcurrentTasks: 100
+  OrganizationBinding:
+    IncludeMasterAccount: true
+    Region: us-east-1 # Only compatible to us-east-1 region

@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: '2010-09-09-OC'
+Description: default template generated for organization
+
+Organization:
+
+  PasswordPolicy:
+    Type: OC::ORG::PasswordPolicy
+    Properties:
+      MaxPasswordAge: 90
+      MinimumPasswordLength: 14
+      RequireLowercaseCharacters: true
+      RequireNumbers: true
+      RequireSymbols: true
+      RequireUppercaseCharacters: true
+      PasswordReusePrevention: 8
+      AllowUsersToChangePassword: true
+
+  ManagementAccount:
+    Type: OC::ORG::MasterAccount
+    Properties:
+      AccountName: <Management Account>
+      AccountId: '<Account ID>'
+      RootEmail: <email@domain.com>
+      Alias: <OrganizationName-main>
+      PasswordPolicy: !Ref PasswordPolicy
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 300
+
+  OrganizationRoot:
+    Type: OC::ORG::OrganizationRoot
+    Properties:
+      DefaultOrganizationAccessRoleName: OrganizationAccountAccessRole
+
+  SandboxOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Sandbox
+
+  SecurityOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Security
+      Accounts:
+        - !Ref LogArchiveAccount
+        - !Ref IdentityAccount
+
+  InfrastructureOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Infrastructure
+      Accounts:
+        - !Ref SharedServicesAccount
+
+  SuspendedOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Suspended
+
+  DeploymentsOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Deployments
+      Accounts:
+        - !Ref PocDeploymentsAccount
+
+  WorkloadsOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Workloads
+      OrganizationalUnits:
+        - !Ref DevelopmentOU
+        - !Ref TestOU
+        - !Ref StagingOU
+        - !Ref ProductionOU
+
+  DevelopmentOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Development
+      Accounts:
+        - !Ref PocDevelopmentAccount
+
+  TestOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Test
+      Accounts:
+        - !Ref PocTestAccount
+
+  StagingOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Staging
+      Accounts:
+        - !Ref PocStagingAccount
+
+  ProductionOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: Production
+      Accounts:
+        - !Ref PocProductionAccount
+
+  StagingSCPOU:
+    Type: OC::ORG::OrganizationalUnit
+    Properties:
+      OrganizationalUnitName: StagingSCP
+      Accounts:
+        - !Ref StagingSCPAccount
+
+  LogArchiveAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Log Archive Account
+      Alias: <OrganizationName-log-archive>
+      RootEmail: <devops+aws-log@domain.com>
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 5
+
+  IdentityAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Identity Account
+      Alias: <OrganizationName-identity>
+      RootEmail: <devops+aws-identity@domain.com>
+      PasswordPolicy: !Ref PasswordPolicy
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 5
+
+  SharedServicesAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Shared Services Account
+      Alias: <OrganizationName-shared-services>
+      RootEmail: <devops+aws-shared-services@domain.com>
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 10
+
+  PocDevelopmentAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Poc Development Account
+      Alias: <OrganizationName-dev>
+      RootEmail: <devops+aws-dev@domain.com>
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 100
+        Environment: development
+        Domain: <dev.domain.com>
+
+  PocTestAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Poc Test Account
+      Alias: <OrganizationName-test>
+      RootEmail: <devops+aws-test@domain.com>
+      Tags:
+        AccountOwnerEmail: devops@Poc.co
+        BudgetThreshold: 100
+        Environment: test
+        Domain: <test.domain.com>
+
+  PocStagingAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Poc Staging Account
+      Alias: <OrganizationName-stg>
+      RootEmail: <devops+aws-stg@domain.com>
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 100
+        Environment: staging
+        Domain: <stg.domain.com>
+
+  PocProductionAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Poc Production Account
+      Alias: <OrganizationName-prod>
+      RootEmail: <devops+aws-prod@domain.com>
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 200
+        Environment: production
+        Domain: <prod.domain.com>
+
+  PocDeploymentsAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Poc Deployments Account
+      Alias: <OrganizationName-dep>
+      RootEmail: <devops+aws-dep@domain.com>
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 10
+
+  StagingSCPAccount:
+    Type: OC::ORG::Account
+    Properties:
+      AccountName: Staging SCP Account
+      Alias: <OrganizationName-sscp>
+      RootEmail: <devops+aws-sscp@domain.com>
+      Tags:
+        AccountOwnerEmail: <OtherEmail@domain.com>
+        BudgetThreshold: 5

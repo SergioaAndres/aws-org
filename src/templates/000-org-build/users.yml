@@ -1,0 +1,407 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+# Read Only
+  ReadRole:
+    OrganizationBinding: !Ref ManagedBinding
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: readonly
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${IdentityAccount}:root
+          Action: sts:AssumeRole
+          Condition:
+            Bool:
+              aws:MultiFactorAuthPresent: 'true'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+
+  AssumeReadRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: AssumeRolePolicy-Read
+      Description: Assume the read role
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: AssumeReadRolePolicy
+          Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Resource: Fn::EnumTargetAccounts DevelopmentBinding 'arn:aws:iam::${account}:role/readonly'
+  
+  AssumeDevOpsReadRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: DevOpsAssumeRolePolicy-Read
+      Description: Assume the read role
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: AssumeReadRolePolicy
+          Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Resource: Fn::EnumTargetAccounts ManagedBinding 'arn:aws:iam::${account}:role/readonly'
+
+# Authenticated IAM user
+  AuthPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: MFAPolicy
+      Description: Self-manage an MFA device
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: AllowViewAccountInfo
+          Effect: Allow
+          Action: 
+            - iam:ListVirtualMFADevices
+            - iam:GetAccountPasswordPolicy
+          Resource: '*'
+        - Sid: AllowManageOwnVirtualMFADevice
+          Effect: Allow
+          Action:
+           - iam:CreateVirtualMFADevice
+           - iam:DeleteVirtualMFADevice
+          Resource: arn:aws:iam::*:mfa/${aws:username}
+        - Sid: AllowManageOwnUserPasswordAndMFA
+          Effect: Allow
+          Action:
+            - iam:DeactivateMFADevice
+            - iam:EnableMFADevice
+            - iam:GetUser
+            - iam:ListMFADevices
+            - iam:ResyncMFADevice
+            - iam:ChangePassword
+          Resource: arn:aws:iam::*:user/${aws:username}
+        - Sid: AllowManageOwnAccessKeys
+          Effect: Allow
+          Action:
+            - iam:CreateAccessKey
+            - iam:DeleteAccessKey
+            - iam:ListAccessKeys
+            - iam:UpdateAccessKey
+          Resource:
+            - 'arn:aws:iam::*:user/${aws:username}'
+        - Sid: DenyAllExceptListedIfNoMFA
+          Effect: Deny
+          NotAction:
+            - iam:CreateVirtualMFADevice
+            - iam:EnableMFADevice
+            - iam:GetUser
+            - iam:ListMFADevices
+            - iam:ListVirtualMFADevices
+            - iam:ResyncMFADevice
+            - sts:GetSessionToken
+            - iam:ChangePassword
+          Resource: '*'
+          Condition:
+            BoolIfExists:
+              aws:MultiFactorAuthPresent: 'false'
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W13
+            reason: The wildcard resource used only for actions that don't support filter.
+  OwnUserInfoPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: OwnUserInfo
+      Description: ViewOwnUserInfo
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: ViewOwnUserInfo
+          Effect: Allow
+          Action:
+            - iam:GetUserPolicy
+            - iam:ListGroupsForUser
+            - iam:ListAttachedUserPolicies
+            - iam:ListUserPolicies
+            - iam:GetUser
+          Resource:
+            - arn:aws:iam::*:user/${aws:username}
+
+  AuthGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Auth
+      ManagedPolicyArns:
+      - !Ref AuthPolicy
+      - !Ref OwnUserInfoPolicy
+
+# DevOps administrator
+  DevOpsAdministratorRole:
+    OrganizationBinding: !Ref ManagedBinding
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: devops
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${IdentityAccount}:root
+          Action: sts:AssumeRole
+          Condition:
+            Bool:
+              aws:MultiFactorAuthPresent: 'true'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/job-function/SystemAdministrator
+        - arn:aws:iam::aws:policy/PowerUserAccess
+        - arn:aws:iam::aws:policy/IAMFullAccess
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W44
+            reason: DevOps role requires elevated managed rights.
+  AssumeDevOpsAdministratorRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: AssumeRolePolicy-DevOpsAdministrator
+      Description: Assume the DevOps Administrator user role
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: AssumeDevOpsAdministratorRolePolicy
+          Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Resource: Fn::EnumTargetAccounts ManagedBinding 'arn:aws:iam::${account}:role/devops'
+
+# Developer Power
+  DeveloperPowerRole:
+    OrganizationBinding: !Ref DevelopmentBinding
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: developerpower
+      MaxSessionDuration: 14400
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${IdentityAccount}:root
+          Action: sts:AssumeRole
+          Condition:
+            Bool:
+              aws:MultiFactorAuthPresent: 'true'
+      ManagedPolicyArns:
+        - !Ref CognitoPolicy
+        - !Ref SSMPolicy
+
+  CognitoPolicy:
+    OrganizationBinding: !Ref DevelopmentBinding
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Policy to support actions on Cognito service
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+            - cognito-idp:AdminDeleteUser
+            - cognito-idp:AdminInitiateAuth
+            - cognito-idp:AdminDeleteUserAttributes
+            - cognito-idp:AdminSetUserMFAPreference
+            - cognito-idp:AdminCreateUser
+            - cognito-idp:AdminSetUserPassword
+            - cognito-idp:AdminSetUserSettings
+            - cognito-idp:AdminUpdateUserAttributes
+            - cognito-idp:AdminRespondToAuthChallenge
+            - cognito-idp:AdminConfirmSignUp
+            - cognito-idp:AdminEnableUser
+            - cognito-idp:AdminDisableUser
+            - cognito-idp:AdminResetUserPassword
+            - cognito-idp:ListUsers
+            - cognito-idp:AdminGetUser
+            - cognito-idp:AddCustomAttributes
+            - cognito-idp:DescribeUserPool
+            - cognito-idp:AdminListGroupsForUser
+
+          Resource: Fn::EnumTargetAccounts DevelopmentBinding 'arn:aws:cognito-idp:us-east-2:${account}:userpool/us-east-2_Zb53RtAxI'
+        - Effect: Allow
+          Action:
+            - cognito-idp:VerifyUserAttribute
+            - cognito-idp:AssociateSoftwareToken
+            - cognito-idp:VerifySoftwareToken
+            - cognito-idp:ResendConfirmationCode
+            - cognito-idp:ListUserPools
+          Resource: '*'
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W13
+            reason: The wildcard resource only for actions that don't support filter
+  SSMPolicy:
+    OrganizationBinding: !Ref DevelopmentBinding
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Policy to support actions on SSM and secret manager
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+            - ssm:GetParametersByPath
+            - ssm:GetParameters
+            - ssm:GetParameterHistory
+          Resource: Fn::EnumTargetAccounts DevelopmentBinding 'arn:aws:ssm:us-east-2:${account}:parameter/*'
+        - Effect: Allow
+          Action:
+            - ssm:DescribeParameters
+          Resource: '*'
+        - Effect: Allow
+          Action:
+            - secretsmanager:DescribeSecret
+            - secretsmanager:GetSecretValue
+            - secretsmanager:ListSecretVersionIds
+          Resource: Fn::EnumTargetAccounts DevelopmentBinding 'arn:aws:secretsmanager:us-east-2:${account}:secret:*'
+        - Effect: Allow
+          Action:
+            - secretsmanager:ListSecrets
+          Resource: '*'
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W13
+            reason: The wildcard resource only for actions that don't support filter
+  AssumeDeveloperPowerRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: AssumeRolePolicy-DeveloperPower
+      Description: Assume the Developer Power user role
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: AssumeDeveloperPowerRolePolicy
+          Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Resource: Fn::EnumTargetAccounts DevelopmentBinding 'arn:aws:iam::${account}:role/developerpower'
+
+# Break glass 
+  BreakGlassRole:
+    OrganizationBinding: !Ref ManagedBinding
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: breakglass
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${IdentityAccount}:root
+          Action: sts:AssumeRole
+          Condition:
+            Bool:
+              aws:MultiFactorAuthPresent: 'true'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W43
+            reason: Breakglass role requires administrative rights, it's used for emergencies only.
+  AssumeBreakGlassRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: AssumeRolePolicy-BreakGlass
+      Description: Assume the Break Glass role
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: AssumeBreakGlassRolePolicy
+          Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Resource: Fn::EnumTargetAccounts ManagedBinding 'arn:aws:iam::${account}:role/breakglass'
+
+# DevOps Team group
+  DevOpsTeamGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: "DevOpsTeamGroup"
+      ManagedPolicyArns:
+        - !Ref AssumeDevOpsAdministratorRolePolicy
+        - !Ref AssumeDeveloperPowerRolePolicy
+        - !Ref AssumeBreakGlassRolePolicy
+        - !Ref AssumeDevOpsReadRolePolicy
+
+# Developer Team group
+  DevelopersTeamGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: "DevelopersTeamGroup"
+      ManagedPolicyArns:
+        - !Ref AssumeDeveloperPowerRolePolicy
+        - !Ref AssumeReadRolePolicy
+
+# QA Team group
+  QATeamGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: "QATeamGroup"
+      ManagedPolicyArns:
+        - !Ref AssumeReadRolePolicy
+
+# Identity users
+  UsersFirstPasswordSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Description: First users password secret.
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "generic"}'
+        GenerateStringKey: password
+        PasswordLength: 12
+        ExcludeCharacters: '"@/\'
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W77
+            reason: The initial user password. Forced to update after the first login. Doesn't require cross-account share.
+# Admin
+  AdminUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: admin@domain
+      LoginProfile:
+        Password: !Sub '{{resolve:secretsmanager:${UsersFirstPasswordSecret}::password}}'
+        PasswordResetRequired: true
+      Groups:
+        - !Ref AuthGroup
+        - !Ref DevOpsTeamGroup
+      Tags: 
+        - Key: Creation
+          Value: Managed
+        - Key: FullName
+          Value: Name Surname
+        - Key: Email
+          Value: admin@domain.com
+        - Key: Position
+          Value: DevOps
+
+  DeveloperUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: developer@domain
+      LoginProfile:
+        Password: !Sub '{{resolve:secretsmanager:${UsersFirstPasswordSecret}::password}}'
+        PasswordResetRequired: true
+      Groups:
+        - !Ref AuthGroup
+        - !Ref DevelopersTeamGroup
+      Tags: 
+        - Key: Creation
+          Value: Managed
+        - Key: FullName
+          Value: Name Surname
+        - Key: Email
+          Value: developer@domain.com
+        - Key: Position
+          Value: Developer

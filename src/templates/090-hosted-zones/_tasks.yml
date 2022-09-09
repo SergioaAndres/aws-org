@@ -1,0 +1,12 @@
+Parameters:
+  <<: !Include '../../_parameters.yml'
+
+Domains:
+  Type: update-stacks
+  Template: ./subdomains.yml
+  StackName: !Sub '${resourcePrefix}-subdomain'
+  StackDescription: AWS subdomain names for workload accounts.
+  DefaultOrganizationBinding:
+    Region: !Ref primaryRegion
+    AccountsWithTag: Domain
+

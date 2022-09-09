@@ -1,0 +1,17 @@
+Parameters:
+  <<: !Include '../../_parameters.yml'
+
+Users:
+  Type: update-stacks
+  Template: ./users.yml
+  StackName: !Sub '${resourcePrefix}-users'
+  StackDescription: AWS users, roles and groups (IAM Roles used for cross account access)
+  DefaultOrganizationBindingRegion: !Ref primaryRegion
+  DefaultOrganizationBinding:
+    Account: !Ref IdentityAccount
+  OrganizationBindings:
+    DevelopmentBinding:
+      Account: !Ref PocDevelopmentAccount
+    ManagedBinding:
+      IncludeMasterAccount: false
+      Account: '*'

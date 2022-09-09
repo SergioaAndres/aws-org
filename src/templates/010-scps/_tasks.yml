@@ -1,0 +1,33 @@
+Parameters:
+  <<: !Include "../../_parameters.yml"
+
+DenyUnsupportedRegions:
+  Type: update-stacks
+  Template: ./deny-unsupported-regions.yml
+  StackName: !Sub "${resourcePrefix}-deny-unsupported-regions"
+  DefaultOrganizationBindingRegion: us-east-1
+  DefaultOrganizationBinding:
+    IncludeMasterAccount: true
+  Parameters:
+    targetIds: [!Ref OrganizationRoot]
+    supportedRegions: !Ref allRegions
+
+DenyLargeEc2Instances:
+  Type: update-stacks
+  Template: ./deny-large-ec2.yml
+  StackName: !Sub "${resourcePrefix}-deny-large-ec2"
+  DefaultOrganizationBindingRegion: us-east-1
+  DefaultOrganizationBinding:
+    IncludeMasterAccount: true
+  Parameters:
+    targetIds: [!Ref OrganizationRoot]
+
+ReadOnly:
+  Type: update-stacks
+  Template: ./read-only.yml
+  StackName: !Sub "${resourcePrefix}-read-only"
+  DefaultOrganizationBindingRegion: us-east-1
+  DefaultOrganizationBinding:
+    IncludeMasterAccount: true
+  Parameters:
+    targetIds: [!Ref SuspendedOU]
